@@ -1,0 +1,200 @@
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+
+# 1. Load Dataset
+df = pd.read_csv("uber.csv")
+
+print("First 5 Rows:")
+print(df.head())
+
+print("\nDataset Information:")
+print(df.info())
+
+print("\nMissing Values:")
+print(df.isnull().sum())
+
+
+# 2. Data Preprocessing
+
+# Remove unnecessary column
+df = df.drop(columns=["key"], errors="ignore")
+
+# Remove missing values
+df = df.dropna()
+
+# Convert pickup_datetime into datetime format
+df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"], errors="coerce")
+
+df = df.dropna()
+
+# Remove invalid values
+df = df[
+    (df["fare_amount"] > 0) &
+    (df["passenger_count"] >= 1) &
+    (df["passenger_count"] <= 6)
+]
+
+# Remove invalid NYC coordinates
+df = df[
+    (df["pickup_longitude"].between(-74.3, -73.5)) &
+    (df["dropoff_longitude"].between(-74.3, -73.5)) &
+    (df["pickup_latitude"].between(40.5, 41.0)) &
+    (df["dropoff_latitude"].between(40.5, 41.0))
+]
+
+
+# 3. Feature Engineering
+
+# Calculate distance using Haversine formula
+def calculate_distance(lat1, lon1, lat2, lon2):
+
+    lat1 = np.radians(lat1)
+    lon1 = np.radians(lon1)
+    lat2 = np.radians(lat2)
+    lon2 = np.radians(lon2)
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = np.sin(dlat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2)**2
+
+    c = 2 * np.arcsin(np.sqrt(a))
+
+    return 6371 * c
+
+
+df["distance"] = calculate_distance(
+    df["pickup_latitude"],
+    df["pickup_longitude"],
+    df["dropoff_latitude"],
+    df["dropoff_longitude"]
+)
+
+# Extract date and time features
+df["hour"] = df["pickup_datetime"].dt.hour
+df["day"] = df["pickup_datetime"].dt.day
+df["month"] = df["pickup_datetime"].dt.month
+df["weekday"] = df["pickup_datetime"].dt.weekday
+
+# Remove unnecessary datetime column
+df = df.drop(columns=["pickup_datetime"])
+
+
+# 4. Identify and Remove Outliers Using IQR
+
+def remove_outliers(data, column):
+
+    Q1 = data[column].quantile(0.25)
+    Q3 = data[column].quantile(0.75)
+
+    IQR = Q3 - Q1
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    return data[
+        (data[column] >= lower) &
+        (data[column] <= upper)
+    ]
+
+
+print("\nBefore Removing Outliers:", df.shape)
+
+df = remove_outliers(df, "fare_amount")
+df = remove_outliers(df, "distance")
+
+print("After Removing Outliers:", df.shape)
+
+
+# 5. Correlation Analysis
+
+print("\nCorrelation Matrix:")
+print(df.corr())
+
+plt.figure(figsize=(10, 7))
+sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
+plt.title("Correlation Heatmap")
+plt.show()
+
+
+# 6. Select Features and Target
+
+X = df.drop(columns=["fare_amount", "distance"])
+X["distance"] = df["distance"]
+
+y = df["fare_amount"]
+
+
+# 7. Split Dataset into Training and Testing
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+
+# 8. Linear Regression Model
+
+lr = LinearRegression()
+
+lr.fit(X_train, y_train)
+
+lr_pred = lr.predict(X_test)
+
+
+# 9. Random Forest Regression Model
+
+rf = RandomForestRegressor(
+    n_estimators=100,
+    random_state=42,
+    n_jobs=-1
+)
+
+rf.fit(X_train, y_train)
+
+rf_pred = rf.predict(X_test)
+
+
+# 10. Model Evaluation
+
+print("\n----- Linear Regression Results -----")
+
+print("R2 Score:", r2_score(y_test, lr_pred))
+print("RMSE:", np.sqrt(mean_squared_error(y_test, lr_pred)))
+print("MAE:", mean_absolute_error(y_test, lr_pred))
+
+
+print("\n----- Random Forest Results -----")
+
+print("R2 Score:", r2_score(y_test, rf_pred))
+print("RMSE:", np.sqrt(mean_squared_error(y_test, rf_pred)))
+print("MAE:", mean_absolute_error(y_test, rf_pred))
+
+
+# 11. Compare Both Models
+
+results = pd.DataFrame({
+    "Model": ["Linear Regression", "Random Forest"],
+    "R2 Score": [
+        r2_score(y_test, lr_pred),
+        r2_score(y_test, rf_pred)
+    ],
+    "RMSE": [
+        np.sqrt(mean_squared_error(y_test, lr_pred)),
+        np.sqrt(mean_squared_error(y_test, rf_pred))
+    ],
+    "MAE": [
+        mean_absolute_error(y_test, lr_pred),
+        mean_absolute_error(y_test, rf_pred)
+    ]
+})
+
+print("\nModel Comparison:")
+print(results)
