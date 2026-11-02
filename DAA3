@@ -1,0 +1,23 @@
+
+n = int(input("Enter the No.of Elements: "))
+
+w = []
+p = []
+
+for i in range(n):
+    weight = int(input(f"Enter the weight of element{i+1}: "))
+    w.append(weight)
+
+for i in range(n):
+    profit = int(input(f"Enter the Profit By element{i+1}: "))
+    p.append(profit)
+
+c = int(input("Enter the capacity: "))
+
+dp = [0] * (c + 1)
+
+for i in range(n):
+    for j in range(c, w[i] - 1, -1):
+        dp[j] = max(dp[j], p[i] + dp[j - w[i]])
+
+print("Max Profit:", dp[c])
