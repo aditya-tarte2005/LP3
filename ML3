@@ -1,0 +1,126 @@
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+# 1. Read Dataset
+df = pd.read_csv("Churn_Modelling.csv")
+
+print("First 5 Rows:")
+print(df.head())
+
+print("\nDataset Shape:")
+print(df.shape)
+
+print("\nMissing Values:")
+print(df.isnull().sum())
+
+
+# 2. Separate Features and Target
+
+# Remove unnecessary columns
+X = df.drop(
+    columns=["RowNumber", "CustomerId", "Surname", "Exited"],
+    errors="ignore"
+)
+
+y = df["Exited"]
+
+print("\nFeatures:")
+print(X.head())
+
+print("\nTarget:")
+print(y.head())
+
+
+# 3. Identify Numerical and Categorical Columns
+
+num_cols = X.select_dtypes(include=["int64", "float64"]).columns
+cat_cols = X.select_dtypes(include=["object"]).columns
+
+
+# 4. Split Dataset into Training and Testing
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+
+# 5. Normalize and Encode Data
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", StandardScaler(), num_cols),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
+    ]
+)
+
+
+# 6. Build Neural Network Model
+
+model = Pipeline([
+    ("preprocessing", preprocessor),
+
+    ("classifier", MLPClassifier(
+        hidden_layer_sizes=(64, 32),
+        activation="relu",
+        solver="adam",
+        max_iter=300,
+        early_stopping=True,
+        random_state=42
+    ))
+])
+
+
+# 7. Train the Model
+
+model.fit(X_train, y_train)
+
+
+# 8. Predict Results
+
+y_pred = model.predict(X_test)
+
+
+# 9. Evaluate Model
+
+accuracy = accuracy_score(y_test, y_pred)
+
+print("\nModel Accuracy:", accuracy)
+
+print("\nConfusion Matrix:")
+cm = confusion_matrix(y_test, y_pred)
+print(cm)
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+
+# 10. Display Confusion Matrix
+
+plt.figure(figsize=(6, 4))
+
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=["Not Churn", "Churn"],
+    yticklabels=["Not Churn", "Churn"]
+)
+
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Bank Customer Churn Confusion Matrix")
+plt.show()
